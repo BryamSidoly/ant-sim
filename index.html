@@ -635,52 +635,213 @@ function resize(){
   ctx.setTransform(dpr*r.width/(C.W),0,0,dpr*r.height/C.H,0,0);
 }
 function colorForColony(c){return c.color===70?"#d98b42":"#c85d57"}
-function draw(){
+function draw() {
   ctx.clearRect(0,0,C.W,C.H);
-  // solo
-  ctx.fillStyle="#172118";ctx.fillRect(0,0,C.W,C.H);
-  for(let y=0;y<C.H;y++)for(let x=0;x<C.W;x++){
-    const t=state.terrain[y][x];
-    if(t.water)ctx.fillStyle="#2e7094";
-    else if(t.tunnel)ctx.fillStyle="#2d241b";
-    else if(t.rock)ctx.fillStyle="#4a4a3e";
-    else ctx.fillStyle=`rgb(${25+Math.floor(t.nutrient*12)},${32+Math.floor(t.moisture*18)},${23+Math.floor(t.nutrient*8)})`;
-    ctx.fillRect(x,y,1.02,1.02);
+
+  const surfaceY = 22; // Nível da superfície dividindo céu e terra
+
+  // 1. CÉU E NUVENS (Fundo)
+  let grad = ctx.createLinearGradient(0, 0, 0, surfaceY);
+  grad.addColorStop(0, "#f2a093"); // Rosa/Pêssego no topo
+  grad.addColorStop(1, "#f8c792"); // Laranja claro próximo ao chão
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, C.W, surfaceY);
+
+  // Nuvens estilizadas
+  ctx.fillStyle = "#fff";
+  const clouds = [[15, 6], [50, 4], [95, 7], [135, 5]];
+  for(let [cx, cy] of clouds) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, 7);
+    ctx.arc(cx+3, cy-1.5, 3.5, 0, 7);
+    ctx.arc(cx+6, cy, 2.5, 0, 7);
+    ctx.arc(cx+8, cy+1, 2, 0, 7);
+    ctx.fill();
   }
-  // superfície
-  if(viewMode!=="individual"){
-    for(const p of state.plants){ctx.fillStyle="#477d3c";ctx.beginPath();ctx.arc(p.x,p.y,.7+Math.min(1,p.energy),0,7);ctx.fill()}
-    for(const f of state.foods){ctx.fillStyle=f.type==="protein"?"#d3a05a":"#a7d36b";ctx.beginPath();ctx.arc(f.x,f.y,.6+Math.min(1,f.amount/12),0,7);ctx.fill()}
-    for(const w of state.water){ctx.fillStyle="#4da7d4aa";ctx.beginPath();ctx.arc(w.x,w.y,Math.min(2,w.amount/10),0,7);ctx.fill()}
-    for(const p of state.creatures){
-      ctx.fillStyle=p.type==="spider"?"#b66b66":p.type==="bird"?"#b7b3a0":p.type==="aphid"?"#7bbd62":"#a07a4f";
-      ctx.beginPath();ctx.arc(p.x,p.y,p.type==="bird"?1.5:1,0,7);ctx.fill()
+
+  // 2. NATUREZA (Árvores e Superfície)
+  const trees = [
+    {x: 10, h: 12, c: "#6ab354"}, {x: 24, h: 10, c: "#5a9645"}, {x: 38, h: 15, c: "#4a8037"},
+    {x: 52, h: 11, c: "#5a9645"}, {x: 70, h: 14, c: "#6ab354"}, {x: 90, h: 10, c: "#4a8037"},
+    {x: 110, h: 13, c: "#6ab354"}, {x: 130, h: 15, c: "#5a9645"}, {x: 145, h: 11, c: "#6ab354"}
+  ];
+  for(let t of trees) {
+    // Tronco
+    ctx.fillStyle = "#614532";
+    ctx.fillRect(t.x-0.8, surfaceY-t.h, 1.6, t.h);
+    // Copa das árvores (formato de trevo)
+    ctx.fillStyle = t.c;
+    ctx.beginPath();
+    ctx.arc(t.x, surfaceY-t.h-2, 4.5, 0, 7);
+    ctx.arc(t.x-3.5, surfaceY-t.h+1, 4, 0, 7);
+    ctx.arc(t.x+3.5, surfaceY-t.h+1, 4, 0, 7);
+    ctx.fill();
+  }
+
+  // Arbustos de fundo na linha do horizonte
+  for(let x=0; x<C.W; x+=4) {
+     if((x*3)%7 > 3) {
+         ctx.fillStyle = "#4a8037";
+         ctx.beginPath(); ctx.arc(x, surfaceY-1, 2.5, 0, 7); ctx.fill();
+     }
+  }
+
+  // 3. SOLO E CAMADAS DE TERRA
+  for(let y = surfaceY; y < C.H; y++) {
+    for(let x = 0; x < C.W; x++) {
+      const t = state.terrain[y][x];
+
+      // Cores das camadas geológicas
+      let soilColor = "#bba38a"; // Camada 1 (Clara)
+      if (y > 45) soilColor = "#b09176"; // Camada 2
+      if (y > 65) soilColor = "#a6876c"; // Camada 3
+      if (y > 80) soilColor = "#9c7c62"; // Camada 4 (Escura)
+
+      // Ruído procedural suave para dar textura arenosa à terra
+      const noise = Math.abs((Math.sin(x*12.9898 + y*78.233) * 43758.5453) % 1);
+      if (noise > 0.7) soilColor = "#a68c72"; 
+      if (noise < 0.2) soilColor = "#c5b099"; 
+
+      // Veios de rocha (linhas horizontais cinzas com leves falhas orgânicas)
+      if ((y === 48 || y === 49) || (y === 68 || y === 69) || (y === 84 || y === 85)) {
+         if (Math.abs(Math.sin(x * 0.2)) > 0.15) {
+             soilColor = "#787c80";
+             if (noise > 0.5) soilColor = "#62676b";
+         }
+      }
+
+      if (t.water) {
+         ctx.fillStyle = "#2e7094";
+         ctx.fillRect(x,y,1.02,1.02);
+      } else if (!t.tunnel && !t.rock) {
+         ctx.fillStyle = soilColor;
+         ctx.fillRect(x,y,1.02,1.02);
+      }
     }
   }
-  // túneis e câmaras
-  for(const c of state.colonies){
-    ctx.strokeStyle=colorForColony(c)+"66";ctx.lineWidth=.45;
-    for(const ch of c.chambers){ctx.beginPath();ctx.arc(ch.x,ch.y,ch.r,0,7);ctx.stroke()}
-    ctx.fillStyle=colorForColony(c);ctx.beginPath();ctx.arc(c.nest.x,c.nest.y,1.8,0,7);ctx.fill();
-    // território aproximado pela densidade/raio
-    ctx.strokeStyle=colorForColony(c)+"35";ctx.beginPath();ctx.arc(c.nest.x,c.nest.y,Math.sqrt(c.territory)*2,0,7);ctx.stroke()
+
+  // Superfície de Grama
+  ctx.fillStyle = "#76a655";
+  ctx.fillRect(0, surfaceY, C.W, 1.5);
+  // Detalhes da grama (pequenos pontos brancos)
+  ctx.fillStyle = "#fff";
+  for(let x=2; x<C.W; x+=15) {
+     ctx.fillRect(x, surfaceY-0.5, 0.5, 0.5);
+     ctx.fillRect(x+1, surfaceY-1, 0.5, 0.5);
   }
+
+  // Formigueiros (Montículos na superfície exterior)
+  ctx.fillStyle = "#4a423a";
+  for (const c of state.colonies) {
+     if(c.nest.y < surfaceY) continue; 
+     ctx.beginPath();
+     ctx.moveTo(c.nest.x - 7, surfaceY);
+     ctx.lineTo(c.nest.x - 1, surfaceY - 5);
+     ctx.lineTo(c.nest.x + 3, surfaceY - 4);
+     ctx.lineTo(c.nest.x + 8, surfaceY);
+     ctx.fill();
+     // Furo da entrada
+     ctx.fillStyle = "#2b1c11";
+     ctx.beginPath();
+     ctx.arc(c.nest.x, surfaceY-1, 1.5, 0, 7);
+     ctx.fill();
+  }
+
+  // 4. TÚNEIS E CÂMARAS (Renderizados por cima, como recortes suaves)
+  ctx.fillStyle = "#5c4028";
+  for (const c of state.colonies) {
+      for (const ch of c.chambers) {
+          if(ch.y < surfaceY) continue;
+          ctx.beginPath();
+          ctx.arc(ch.x, ch.y, ch.r, 0, 7);
+          ctx.fill();
+      }
+  }
+  for(let y = surfaceY; y < C.H; y++) {
+    for(let x = 0; x < C.W; x++) {
+      if(state.terrain[y][x].tunnel) {
+         ctx.beginPath();
+         // Raio ligeiramente expandido (1.6) cria a estética orgânica/arredondada
+         ctx.arc(x+0.5, y+0.5, 1.6, 0, 7); 
+         ctx.fill();
+      }
+    }
+  }
+
+  // Pedras redondas e texturizadas
+  for(let y = surfaceY; y < C.H; y++) {
+    for(let x = 0; x < C.W; x++) {
+      if(state.terrain[y][x].rock && !state.terrain[y][x].tunnel) {
+         ctx.fillStyle = "#3b4042"; // Sombra base
+         ctx.beginPath(); ctx.arc(x+0.8, y+1.2, 1.2, 0, 7); ctx.fill();
+         ctx.fillStyle = "#707678"; // Corpo da pedra
+         ctx.beginPath(); ctx.arc(x+0.5, y+0.5, 1.2, 0, 7); ctx.fill();
+      }
+    }
+  }
+
+  // 5. RECURSOS E ENTIDADES
+  if(viewMode !== "individual") {
+     for (const p of state.plants) {
+       ctx.fillStyle = "#a8d672";
+       ctx.beginPath(); ctx.arc(p.x, Math.max(surfaceY, p.y), .7+Math.min(1, p.energy), 0, 7); ctx.fill();
+     }
+     for (const f of state.foods) {
+       ctx.fillStyle=f.type==="protein"?"#d3a05a":"#a7d36b";
+       ctx.fillRect(f.x,f.y,1.5,1.5);
+     }
+     for (const w of state.water) {
+       ctx.fillStyle="#4da7d4aa";
+       ctx.beginPath();ctx.arc(w.x,w.y,Math.min(2,w.amount/10),0,7);ctx.fill();
+     }
+     for (const p of state.creatures) {
+       ctx.fillStyle=p.type==="spider"?"#b66b66":p.type==="bird"?"#b7b3a0":p.type==="aphid"?"#7bbd62":"#a07a4f";
+       ctx.beginPath();ctx.arc(p.x,p.y,p.type==="bird"?1.5:1,0,7);ctx.fill();
+     }
+  }
+
   if(viewMode==="science"){
     for(const p of state.pheromones.filter(p=>p.amount>3)){
       ctx.fillStyle=p.type==="danger"?"#e45f5f55":p.type==="food"?"#8bd45044":"#b782e655";
       ctx.fillRect(p.x-.3,p.y-.3,.6,.6)
     }
   }
-  for(const a of state.ants){
-    if(!a.alive)continue;
-    const c=state.colonies.find(x=>x.id===a.colonyId);
-    ctx.fillStyle=c?colorForColony(c):"#ddd";
-    const r=a.caste==="queen"?1.2:a.caste==="soldier"||a.caste==="guard"?.75:.48;
-    ctx.beginPath();ctx.arc(a.x,a.y,r,0,7);ctx.fill();
+
+  // 6. FORMIGAS
+  for(const a of state.ants) {
+    if(!a.alive) continue;
+    ctx.fillStyle = "#1c120a"; // Marrom escuro denso padrão
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    if (a.vx !== 0 || a.vy !== 0) {
+       ctx.rotate(Math.atan2(a.vy, a.vx));
+    }
+    const s = a.caste === "queen" ? 1.4 : (a.caste === "soldier" ? 1.1 : 0.8);
+
+    // Perninhas finas salientes
+    ctx.strokeStyle = "#1c120a";
+    ctx.lineWidth = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(0, -s); ctx.lineTo(0, -s-0.8);
+    ctx.moveTo(0, s); ctx.lineTo(0, s+0.8);
+    ctx.moveTo(-s, -s*0.5); ctx.lineTo(-s-0.5, -s-0.8);
+    ctx.moveTo(-s, s*0.5); ctx.lineTo(-s-0.5, s+0.8);
+    ctx.stroke();
+
+    // Estrutura corporal articulada
+    ctx.beginPath();
+    ctx.arc(-s*0.6, 0, s*0.8, 0, 7); // Abdômen
+    ctx.arc(s*0.6, 0, s*0.6, 0, 7); // Cabeça
+    ctx.fill();
+
+    ctx.restore();
   }
+
+  // Highlight da seleção
   if(selected&&selected.alive){
     ctx.strokeStyle="#fff";ctx.lineWidth=.35;ctx.beginPath();ctx.arc(selected.x,selected.y,2.2,0,7);ctx.stroke()
   }
+
   updateUI();
 }
 function resizeAndDraw(){resize();draw()}
